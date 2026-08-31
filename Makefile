@@ -1,6 +1,6 @@
 CC      := g++
 CFLAGS  := -std=c++17 -Wall -Wextra -MMD -MP
-INCLUDES:= -Iinclude
+INCLUDES:= -Iinclude -Iinclude/oled
 LDLIBS  := -lbcm2835
 
 SRCDIR  := src
