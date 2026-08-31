@@ -8,8 +8,8 @@ OBJDIR  := obj
 BINDIR  := bin
 TARGET  := $(BINDIR)/app_spi
 
-SRCS := $(shell find $(SRCDIR) -name '*.cc')
-OBJS := $(patsubst $(SRCDIR)/%.cc,$(OBJDIR)/%.o,$(SRCS))
+SRCS := $(shell find $(SRCDIR) -name '*.cpp')
+OBJS := $(patsubst $(SRCDIR)/%.cpp,$(OBJDIR)/%.o,$(SRCS))
 DEPS := $(OBJS:.o=.d)
 
 all: $(TARGET)
@@ -18,7 +18,7 @@ $(TARGET): $(OBJS)
 	@mkdir -p $(BINDIR)
 	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
 
-$(OBJDIR)/%.o: $(SRCDIR)/%.cc
+$(OBJDIR)/%.o: $(SRCDIR)/%.cpp
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
 
