@@ -1,51 +1,50 @@
 #pragma once
-#include <iostream>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <stdint.h>
-#include <errno.h>
-#include <fcntl.h>
-#include <unistd.h>
-#include <sys/ioctl.h>
-#include <sys/stat.h>
-#include <linux/ioctl.h>
-#include <linux/types.h>
-#include <linux/spi/spidev.h>
 
-#define SPI_DEVICE          "/dev/spidev0.0"
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <bcm2835.h>
 
-#define CMD_WRITE 0x2
-#define CMD_READ 0x3
+#define SPI_DEVICE "SPI0"
 
-#define READ 0b011 //Read data from memory array beginning at selected address 
-#define WRITE 0b010 //Write data to memory array beginning at selected address 
-#define WRDI 0b100//Reset the write enable latch (disable write operations) 
-#define WREN 0b110//Set the write enable latch (enable write operations) 
-#define RDSR 0b101//Read STATUS 
-#define WRSR 0b001//Write STATUS register
+// AD9833 control register bits (D15:D14 select register)
+#define CMD_CTRL    0b00
+#define CMD_FREQ0   0b01
+#define CMD_FREQ1   0b10
+#define CMD_PHASE0  0b11
+#define CMD_PHASE1  0b11 // with D13 set selects PHASE1
 
-class SPI{
+// AD9833 control register bits (D13:D0)
+#define CTRL_B28       (1 << 13)
+#define CTRL_HLB       (1 << 12)
+#define CTRL_FSEL      (1 << 11)
+#define CTRL_PSEL      (1 << 10)
+#define CTRL_PIN_SW    (1 << 9)
+#define CTRL_RESET     (1 << 8)
+#define CTRL_SLEEP1    (1 << 7)
+#define CTRL_SLEEP12   (1 << 6)
+#define CTRL_OPBITEN   (1 << 5)
+#define CTRL_SIGN_PIB  (1 << 4)
+#define CTRL_DIV2      (1 << 3)
+#define CTRL_MODE      (1 << 1)
+
+#define FREQ_REG_SIZE  0x2000 // frequency register is 28 bits (2 x 14-bit writes)
+#define PHASE_REG_SIZE 0x0FFF // phase register is 12 bits
+
+#define FSYNC_ACTIVE  0x00
+#define FSYNC_RELEASE 0xFF
+
+class SPI {
 public:
-SPI();
-~SPI();
-void read_write();
-void init();
-void read_write(size_t,uint16_t);
-void write(uint16_t);
-void settings_spi();
-void spi_close();
-uint8_t read(uint16_t);
-//void write(uint16_t);
-private:
+    SPI();
+    ~SPI();
 
-uint8_t tx_buffer[255];
-uint8_t rx_buffer[255];
-uint32_t len_data = 32;
-uint32_t spi_speed = 1000000;
-int fs;
-int ret;
-struct spi_ioc_transfer spi;
-uint8_t looper;
-uint32_t scratch32;
+    void write(uint16_t cmd);
+    void set_frequency(uint32_t freq, double mclk = 25.0e6);
+    void set_phase(uint16_t phase);
+    void reset();
+
+private:
+    void select(uint8_t ctrl);
+    void write_word(uint8_t high, uint8_t low);
 };

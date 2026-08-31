@@ -1,6 +1,7 @@
 CC      := g++
 CFLAGS  := -std=c++17 -Wall -Wextra -MMD -MP
 INCLUDES:= -Iinclude
+LDLIBS  := -lbcm2835
 
 SRCDIR  := src
 OBJDIR  := obj
@@ -15,7 +16,7 @@ all: $(TARGET)
 
 $(TARGET): $(OBJS)
 	@mkdir -p $(BINDIR)
-	$(CC) $(CFLAGS) $^ -o $@
+	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
 
 $(OBJDIR)/%.o: $(SRCDIR)/%.cc
 	@mkdir -p $(dir $@)

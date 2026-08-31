@@ -1,131 +1,57 @@
 #include "spi.hpp"
-//#define DBG
-//#define PRINT_BUFFER
+#include <unistd.h>
 
-void SPI::init(){
-fs = open(SPI_DEVICE, O_RDWR);
-    if(fs < 0) {
-        printf("Could not open the SPI device...\r\n");
+SPI::SPI() {
+    if (!bcm2835_init()) {
+        fprintf(stderr, "bcm2835 init failed\n");
         exit(EXIT_FAILURE);
     }
 
-    ret = ioctl(fs, SPI_IOC_RD_MODE, &scratch32);
-    if(ret != 0) {
-        printf("Could not read SPI mode...\r\n");
-        close(fs);
-        exit(EXIT_FAILURE);
-    }
-    scratch32 |= SPI_MODE_0;
-    ret = ioctl(fs, SPI_IOC_WR_MODE, &scratch32);//SPI_IOC_WR_MODE32
-    if(ret != 0) {
-        printf("Could not write SPI mode...\r\n");
-        close(fs);
-        exit(EXIT_FAILURE);
-    }
-#ifdef DBG
-	printf("before this->spi_speed %d\n",scratch32);
-#endif
-	ret = ioctl(fs, SPI_IOC_RD_MAX_SPEED_HZ, &scratch32);
-#ifdef DBG
-	printf("after this->spi_speed %d\n",scratch32);
-#endif
-    if(ret != 0) {
-        printf("Could not read the SPI max speed...\r\n");
-        close(fs);
-        exit(EXIT_FAILURE);
-    }
-
-    scratch32 = 5000000;
-
-    ret = ioctl(fs, SPI_IOC_WR_MAX_SPEED_HZ, &scratch32);
-#ifdef DBG
-	printf("before this->spi_speed %d\n",scratch32);
-#endif
-    if(ret != 0) {
-        printf("Could not write the SPI max speed...\r\n");
-        close(fs);
-        exit(EXIT_FAILURE);
-    }
-#ifdef DBG
-printf("this->spi_speed %d\n",scratch32);
-#endif
+    // Configure SPI0 as master, mode 0, MSB first, 8 bits per word
+    bcm2835_spi_begin();
+    bcm2835_spi_setBitOrder(BCM2835_SPI_BIT_ORDER_MSBFIRST);
+    bcm2835_spi_setDataMode(BCM2835_SPI_MODE0);
+    bcm2835_spi_setClockDivider(BCM2835_SPI_CLOCK_DIVIDER_16); // ~1.56 MHz @ 25 MHz core
+    bcm2835_spi_chipSelect(BCM2835_SPI_CS0);
+    bcm2835_spi_setChipSelectPolarity(BCM2835_SPI_CS0, LOW);
 }
 
-
-
-void SPI::read_write(size_t size ,uint16_t cmd){
-#ifdef DBG
-	std::cout<<"size_t : "<< size <<"\n";
-#endif
-spi.len = size;
-    for(looper=0; looper<4; ++looper) {
-        tx_buffer[looper] = cmd;
-        rx_buffer[looper] = 0x0;
-    }
-
-ret = ioctl(fs, SPI_IOC_MESSAGE(1), &spi);
-#ifdef DBG
-	printf("fs : status : %d\n" , fs);
-#endif
-    if(ret != 0) {
-#ifdef DBG
-  printf("SPI transfer returned %d...\r\n", ret);
-#endif
- }
-#ifdef PRINT_BUFFER
-    printf("Received SPI buffer...\r\n");
-    for(looper=0; looper<32; ++looper) {
-        printf(" %02x",rx_buffer[looper]);
-    }
-#endif
+SPI::~SPI() {
+    bcm2835_spi_end();
+    bcm2835_close();
 }
 
-void SPI::spi_close(){
-    close(fs);
-    exit(EXIT_SUCCESS);
+// Transmit a 16-bit word: 2 control bits (MSBs) + 14 data bits.
+// Sends MSB byte first.
+void SPI::write(uint16_t cmd) {
+    uint8_t buf[2] = { (uint8_t)(cmd >> 8), (uint8_t)(cmd & 0xFF) };
+    bcm2835_spi_transfern((char*)buf, 2);
 }
 
-void SPI::settings_spi(){
-spi.tx_buf = (unsigned long)tx_buffer;
-spi.rx_buf = (unsigned long)rx_buffer;
-spi.bits_per_word = 0;
-spi.speed_hz = spi_speed;
-spi.delay_usecs = 0;
-spi.len = 2;//despues se modifica
-   for(looper=0; looper<4; ++looper) {
-        tx_buffer[looper] = 0x00;
-        rx_buffer[looper] = 0xFF;
-    }
+// Write to a given AD9833 register: control, frequency (LSB/MSB pairs) or phase.
+void SPI::select(uint8_t reg) {
+    write((uint16_t)(reg << 14));
 }
 
-SPI::SPI(){
-std::cout<<"constructor spi\n";
-	init();
-	settings_spi();
+void SPI::set_frequency(uint32_t freq, double mclk) {
+    if (freq >= (uint32_t)(mclk / 2.0))
+        freq = (uint32_t)(mclk / 2.0) - 1;
+
+    // 28-bit frequency word: freq = value * mclk / 2^28
+    uint32_t word = (uint32_t)(((uint64_t)freq * (1UL << 28)) / (uint64_t)mclk) & 0x0FFFFFFF;
+
+    // Select FREQ0, then write the 14 LSBs (B28 mode -> LSB first, then MSB)
+    select(CMD_FREQ0);
+    write((uint16_t)(word & 0x3FFF));
+    write((uint16_t)((word >> 14) & 0x3FFF));
 }
 
-SPI::~SPI(){
-std::cout<<"destructor spi\n";
-	spi_close();
-if(fs)
-	close(fs);
+void SPI::set_phase(uint16_t phase) {
+    phase &= PHASE_REG_SIZE;
+    select(CMD_PHASE0);
+    write(phase);
 }
 
-
-
-void SPI::write( uint16_t cmd){
-
-spi.len = 2;
-/*    for(looper=0; looper<2; ++looper)
-    {
-        tx_buffer[looper] = cmd;
-        rx_buffer[looper] = 0x0;
-	printf("looper : %d \n",looper);
-    }
-*/  
-    tx_buffer[1] = cmd;
-//  tx_buffer[0] = (cmd >>8 )&& 0xff;
-ret = ioctl(fs, SPI_IOC_MESSAGE(1), &spi);
-    if(ret != 0) return;
-  return ;
+void SPI::reset() {
+    write(CTRL_RESET);
 }

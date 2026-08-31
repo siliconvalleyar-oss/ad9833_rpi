@@ -1,24 +1,21 @@
 #include <iostream>
-#include <vector>
 #include <cstdint>
-#include <string>
+#include <unistd.h>
 #include "spi.hpp"
 
 int main(void) {
-SPI *spi = new (SPI);
-uint16_t address = 0b0101010101010101;
+    SPI spi;
 
-//spi->read_write(2,address);
-//spi->read_write(2,0x0100);
-sleep(0.1);
+    // Start in reset
+    spi.reset();
 
+    // Set FREQ0 to 1 MHz with a 25 MHz master clock
+    spi.set_frequency(1000000, 25.0e6);
 
-//spi->read_write(2,0x2100);
-//spi->read_write(2,0x80c6);
-//spi->read_write(2,0x4000);
-//spi->read_write(2,0xC000);
-spi->write(0x2000);
+    // Exit reset, enable B28 mode, use FREQ0
+    spi.write(CTRL_B28);
 
+    sleep(1);
 
-return 0;
+    return 0;
 }
